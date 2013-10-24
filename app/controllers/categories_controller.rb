@@ -1,20 +1,6 @@
 class CategoriesController < KnowledgebaseController
 	unloadable
 
-  before_filter :find_project, :authorize
-
-  def find_project
-    if !params[:project_id].nil?
-        @project=Project.find(params[:project_id])
-    elsif !params[:category_id].nil?
-        @project=KbCategory.find(params[:category_id]).project
-    elsif !params[:parent_id].nil?
-        @project=KbCategory.find(params[:parent_id]).project
-    elsif !params[:id].nil?
-        @project=KbCategory.find(params[:id]).project
-    end
-  end
-  
   def show
     @category = KbCategory.find(params[:id])
     @articles = @category.articles.find(:all)

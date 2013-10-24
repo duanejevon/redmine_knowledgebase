@@ -4,31 +4,15 @@ class ArticlesController < KnowledgebaseController
   helper :attachments
   include AttachmentsHelper
 
-  before_filter :find_project, :authorize
   before_filter :get_article, :only => [:add_attachment, :show, :edit, :update, :add_comment, :destroy, :destroy_comment]
-
-  def find_project
-    # TODO refactor
-    if !params[:project_id].nil?
-        @project=Project.find(params[:project_id])
-    elsif !params[:category_id].nil?
-        @project=KbCategory.find(params[:category_id]).project
-    elsif !params[:id].nil?
-        @project=KbArticle.find(params[:id]).category.project
-    elsif !params[:article_id].nil?
-        @project=KbArticle.find(params[:article_id]).category.project
-    end
-  end
   
   def new
     @article = KbArticle.new
-    @categories = @project.categories.find(:all)
     @default_category = params[:category_id]
     @article.category_id = params[:category_id]
   end
   
   def rate
-    binding.pry
     @article = KbArticle.find(params[:id])
     rating = params[:rating].to_i
     @article.rate rating if rating > 0
@@ -42,12 +26,10 @@ class ArticlesController < KnowledgebaseController
     @article = KbArticle.new(params[:article])
     @article.category_id = params[:category_id]
     @article.author_id = User.current.id
-	@article.project_id=KbCategory.find(params[:category_id]).project_id
     if @article.save
       attachments = attach(@article, params[:attachments])
       flash[:notice] = l(:label_article_created, :title => @article.title)
-      redirect_to({ :controller => 'categories', :action => 'show', :id=>KbCategory.find(params[:category_id]), :project_id => @project})
-	  KbMailer.article_create(@article).deliver
+      redirect_to({ :controller => 'categories', :action => 'show', :id => @article.category_id })
     else
       render(:action => 'new')
     end
@@ -55,12 +37,11 @@ class ArticlesController < KnowledgebaseController
   
   def show
     @article.view request.remote_addr, User.current
-    @attachments = @article.attachments.find(:all, :order => "created_on DESC")
+    @attachments = @article.attachments.find(:all).sort_by(&:created_on)
     @comments = @article.comments
   end
   
   def edit
-    @categories=@project.categories.find(:all)
   end
   
   def update
@@ -69,8 +50,7 @@ class ArticlesController < KnowledgebaseController
     if @article.update_attributes(params[:article])
       attachments = attach(@article, params[:attachments])
       flash[:notice] = l(:label_article_updated)
-      redirect_to({ :action => 'show', :id => @article.id, :project_id => @project })
-	  KbMailer.article_update(@article).deliver
+      redirect_to({ :action => 'show', :id => @article.id })
     else
       render({:action => 'edit', :id => @article.id})
     end
@@ -81,8 +61,7 @@ class ArticlesController < KnowledgebaseController
     @comment.author = User.current || nil
     if @article.comments << @comment
       flash[:notice] = l(:label_comment_added)
-      redirect_to :action => 'show', :id => @article, :project_id => @project
-	  KbMailer.article_comment(@article, @comment).deliver
+      redirect_to :action => 'show', :id => @article
     else
       show
       render :action => 'show'
@@ -91,24 +70,23 @@ class ArticlesController < KnowledgebaseController
 
   def destroy_comment
     @article.comments.find(params[:comment_id]).destroy
-    redirect_to :action => 'show', :id => @article, :project_id => @project
+    redirect_to :action => 'show', :id => @article
   end
   
   def destroy
-    KbMailer.article_destroy(@article).deliver
     @article.destroy
     flash[:notice] = l(:label_article_removed)
-    redirect_to({ :controller => 'knowledgebase', :action => 'index', :project_id => @project})
+    redirect_to({ :controller => 'knowledgebase', :action => 'index' })
   end
 
   def add_attachment
     attachments = attach(@article, params[:attachments])    
-    redirect_to({ :action => 'show', :id => @article.id, :project_id => @project })
+    redirect_to({ :action => 'show', :id => @article.id })
   end
   
   def tagged
     @tag = params[:id]
-    @list = @project.articles.tagged_with(@tag)	
+    @list = KbArticle.tagged_with(@tag)
   end
 
   def preview
